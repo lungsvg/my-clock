@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SVG 時鐘｜多時區｜12/24 小時｜可自訂日/夜時間｜可選錶面</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg-light: #ffffff;
+      --fg-light: #111111;
+      --muted-light: #606060;
+      --btn-bg-light: #e6e6e6;
+      --btn-fg-light: #111111;
+
+      --bg-dark: #0b0b0b;
+      --fg-dark: #f2f2f2;
+      --muted-dark: #a8a8a8;
+      --btn-bg-dark: #2f2f2f;
+      --btn-fg-dark: #ffffff;
+
+      --card-bg-light: #f7f7f7;
+      --card-bg-dark: #141414;
+
+      --accent: #4c9ffe;
+
+      --container-max: 1000px;
+      --clock-max: 680px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html[data-theme="auto"] body { background-color: var(--bg-dark); color: var(--fg-dark); }
+    }
+    @media (prefers-color-scheme: light) {
+      html[data-theme="auto"] body { background-color: var(--bg-light); color: var(--fg-light); }
+    }
+
+    .light-mode { background-color: var(--bg-light); color: var(--fg-light); }
+    .dark-mode  { background-color: var(--bg-dark);  color: var(--fg-dark);  }
+
+    body {
+      font-family: Arial, Helvetica, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      text-align: center;
+      padding: 20px;
+      transition: background-color 0.35s ease, color 0.35s ease;
+      line-height: 1.6;
+    }
+    .container { max-width: var(--container-max); margin: 0 auto; padding: 0 12px; }
+
+    h1 { margin: 0 0 8px; font-size: clamp(22px, 4vw, 34px); }
+    p.lead { margin: 0 0 18px; font-size: clamp(14px, 2.6vw, 18px); opacity: 0.9; }
+
+    .clock-section {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      align-items: center;
+      justify-items: center;
+      margin: 20px auto 8px;
+    }
+    .clock-card {
+      width: 100%; max-width: var(--clock-max);
+      border-radius: 12px; padding: 16px;
+      background: var(--card-bg-light);
+      transition: background-color 0.35s ease;
+    }
+    .dark-mode .clock-card { background: var(--card-bg-dark); }
+
+    .svg-wrap { width: 100%; aspect-ratio: 1/1; position: relative; overflow: visible; }
+    @supports not (aspect-ratio: 1) { .svg-wrap::before { content: ""; display: block; padding-top: 100%; } }
+    .svg-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    .digital-time { font-variant-numeric: tabular-nums; font-size: clamp(20px, 6vw, 38px); font-weight: 700; letter-spacing: 0.5px; margin-top: 6px; }
+    .date-text { font-size: clamp(12px, 3.2vw, 16px); color: var(--muted-light); }
+    .dark-mode .date-text { color: var(--muted-dark); }
+
+    .controls { width: 100%; max-width: var(--clock-max); margin: 10px auto 0; display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .card { background: var(--card-bg-light); padding: 12px; border-radius: 10px; text-align: left; transition: background-color 0.35s ease; }
+    .dark-mode .card { background: var(--card-bg-dark); }
+    .card h3 { margin: 0 0 10px; font-size: 16px; }
+
+    .row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
+    label { font-size: 14px; }
+    input[type="time"], select { width: 100%; padding: 8px 10px; font-size: 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #000; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .dark-mode input[type="time"], .dark-mode select { background: #111; color: #fff; border-color: #333; }
+    input[type="time"]:focus-visible, select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent); }
+
+    .hint { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+    .toggle-button, .save-button, .reset-button {
+      padding: 10px 16px; font-size: 16px; cursor: pointer; border: 1px solid transparent; border-radius: 10px;
+      background: var(--btn-bg-light); color: var(--btn-fg-light);
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.05s ease; outline: none;
+    }
+    .dark-mode .toggle-button, .dark-mode .save-button, .dark-mode .reset-button { background: var(--btn-bg-dark); color: var(--btn-fg-dark); }
+    .toggle-button:hover, .save-button:hover, .reset-button:hover { filter: brightness(1.05); }
+    .toggle-button:active, .save-button:active, .reset-button:active { transform: translateY(1px); }
+    .toggle-button:focus-visible, .save-button:focus-visible, .reset-button:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+    .status { font-size: 14px; opacity: 0.9; margin-top: 6px; }
+
+    /* 標準錶面（Classic） */
+    .clock-face { fill: #ffffff; stroke: #ddd; }
+    .dark-mode .clock-face { fill: #0f0f0f; stroke: #444; }
+    .mark-hour { stroke: #222; }
+    .mark-minute { stroke: #666; }
+    .dark-mode .mark-hour { stroke: #e8e8e8; }
+    .dark-mode .mark-minute { stroke: #9a9a9a; }
+    .hand-hour { stroke: #111; }
+    .hand-minute { stroke: #333; }
+    .hand-second { stroke: #e74c3c; }
+    .dark-mode .hand-hour { stroke: #fff; }
+    .dark-mode .hand-minute { stroke: #bfbfbf; }
+    .center-dot { fill: #111; }
+    .dark-mode .center-dot { fill: #fff; }
+
+    /* 勞力士運動風（Rolex Sport）樣式類別 */
+    .sport-bezel { fill: none; stroke: #111; stroke-width: 6; }
+    .dark-mode .sport-bezel { stroke: #eaeaea; }
+    .sport-bezel-mark { stroke-width: 2; stroke-linecap: round; }
+    .sport-bezel-major { stroke-width: 2.8; }
+    .sport-bezel-triangle { fill: currentColor; }
+    .sport-dial { fill: #0b0b0b; stroke: #2c2c2c; }
+    .dark-mode .sport-dial { fill: #000; stroke: #3a3a3a; }
+    .sport-hour-marker { fill: #fff; }
+    .dark-mode .sport-hour-marker { fill: #f6f6f6; }
+    .sport-hand-hour, .sport-hand-minute { stroke: #fff; }
+    .dark-mode .sport-hand-hour, .dark-mode .sport-hand-minute { stroke: #fff; }
+    .sport-hand-second { stroke: #e53935; }
+    .sport-center { fill: #fff; }
+    .dark-mode .sport-center { fill: #fff; }
+    .sport-lume { fill: #b6ffda; opacity: .95; } /* 夜光點（裝飾用） */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SVG 時鐘（可選錶面）</h1>
+    <p class="lead">支援 12/24 小時、世界時區、自訂日/夜模式時間，並加入「Rolex Sport」風格錶面。</p>
+
+    <section class="clock-section">
+      <div class="clock-card">
+        <div class="svg-wrap">
+          <svg id="clockSvg" viewBox="0 0 200 200" role="img" aria-label="Analog clock">
+            <!-- 基本面盤（Classic 預設） -->
+            <circle id="dialBase" class="clock-face" cx="100" cy="100" r="92" stroke-width="1.5"></circle>
+
+            <!-- Bezel/運動外圈容器（動態生成） -->
+            <g id="bezelGroup"></g>
+
+            <!-- 刻度（Classic 用） -->
+            <g id="marks"></g>
+
+            <!-- 運動錶面時標容器 -->
+            <g id="sportMarkers"></g>
+
+            <!-- 指針群組 -->
+            <g id="hands" transform="translate(100,100)">
+              <line id="hourHand"   class="hand-hour"   x1="0" y1="6"  x2="0" y2="-45" stroke-width="3.5" stroke-linecap="round"></line>
+              <line id="minuteHand" class="hand-minute" x1="0" y1="8"  x2="0" y2="-65" stroke-width="3"   stroke-linecap="round"></line>
+              <line id="secondHand" class="hand-second" x1="0" y1="10" x2="0" y2="-72" stroke-width="1.8" stroke-linecap="round"></line>
+              <circle id="centerDot" class="center-dot" r="3"></circle>
+            </g>
+          </svg>
+        </div>
+        <div class="digital-time" id="digitalTime">--:--:--</div>
+        <div class="date-text" id="dateText"></div>
+      </div>
+
+      <div class="controls">
+        <div class="card">
+          <h3>時區、格式與錶面</h3>
+          <div class="grid-2">
+            <div class="row">
+              <label for="timezoneSelect">選擇時區</label>
+              <select id="timezoneSelect">
+                <option value="Asia/Taipei" selected>台北 (Asia/Taipei)</option>
+                <option value="Asia/Hong_Kong">香港 (Asia/Hong_Kong)</option>
+                <option value="Asia/Tokyo">東京 (Asia/Tokyo)</option>
+                <option value="Asia/Shanghai">上海 (Asia/Shanghai)</option>
+                <option value="Asia/Singapore">新加坡 (Asia/Singapore)</option>
+                <option value="Europe/London">倫敦 (Europe/London)</option>
+                <option value="Europe/Paris">巴黎 (Europe/Paris)</option>
+                <option value="America/New_York">紐約 (America/New_York)</option>
+                <option value="America/Los_Angeles">洛杉磯 (America/Los_Angeles)</option>
+                <option value="Australia/Sydney">雪梨 (Australia/Sydney)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </div>
+            <div class="row">
+              <label for="formatSwitch">時間格式</label>
+              <select id="formatSwitch">
+                <option value="24" selected>24 小時制</option>
+                <option value="12">12 小時制</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <label for="faceSelect">錶面</label>
+            <select id="faceSelect">
+              <option value="classic" selected>Classic</option>
+              <option value="rolex-sport">Rolex Sport（運動風）</option>
+            </select>
+          </div>
+          <div class="hint">錶面可即時切換；運動風加入外圈刻度、時標形狀與夜光點。</div>
+        </div>
+
+        <div class="card">
+          <h3>自訂主題時間區間</h3>
+          <div class="grid-2">
+            <div>
+              <div class="row"><label for="dayStart">日間開始</label><input type="time" id="dayStart" value="06:00" /></div>
+              <div class="row"><label for="dayEnd">日間結束</label><input type="time" id="dayEnd" value="19:00" /></div>
+            </div>
+            <div>
+              <div class="row"><label for="nightStart">夜間開始</label><input type="time" id="nightStart" value="19:00" /></div>
+              <div class="row"><label for="nightEnd">夜間結束</label><input type="time" id="nightEnd" value="06:00" /></div>
+            </div>
+          </div>
+          <div class="hint">可跨越午夜（如 19:00–06:00）。重疊則以最先符合的時段為準。</div>
+          <div class="actions">
+            <button class="save-button" id="saveSchedule" type="button">儲存時間設定</button>
+            <button class="reset-button" id="resetSchedule" type="button">恢復預設</button>
+            <button class="toggle-button" id="toggleBtn" type="button" aria-pressed="false">手動切換模式</button>
+          </div>
+          <div class="status" id="statusText"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ====== 儲存鍵 ======
+    const STORAGE_THEME = "theme";
+    const STORAGE_SCHEDULE = "themeSchedule";
+    const STORAGE_TZ = "clockTimezone";
+    const STORAGE_FMT = "clockFormat";
+    const STORAGE_FACE = "clockFace"; // 'classic' | 'rolex-sport'
+
+    // ====== DOM ======
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+
+    const tzSelect = document.getElementById("timezoneSelect");
+    const fmtSelect = document.getElementById("formatSwitch");
+    const faceSelect = document.getElementById("faceSelect");
+
+    const toggleBtn = document.getElementById("toggleBtn");
+    const statusText = document.getElementById("statusText");
+
+    const inputs = {
+      dayStart: document.getElementById("dayStart"),
+      dayEnd: document.getElementById("dayEnd"),
+      nightStart: document.getElementById("nightStart"),
+      nightEnd: document.getElementById("nightEnd"),
+    };
+
+    const svg = document.getElementById("clockSvg");
+    const dialBase = document.getElementById("dialBase");
+    const marksGroup = document.getElementById("marks");
+    const bezelGroup = document.getElementById("bezelGroup");
+    const sportMarkers = document.getElementById("sportMarkers");
+
+    const hourHand = document.getElementById("hourHand");
+    const minuteHand = document.getElementById("minuteHand");
+    const secondHand = document.getElementById("secondHand");
+    const centerDot = document.getElementById("centerDot");
+
+    const digitalEl = document.getElementById("digitalTime");
+    const dateEl = document.getElementById("dateText");
+
+    // ====== 主題與時間表 ======
+    function showStatus(msg) {
+      statusText.textContent = msg || "";
+      if (!msg) return;
+      clearTimeout(showStatus._t);
+      showStatus._t = setTimeout(() => statusText.textContent = "", 2500);
+    }
+    function setTheme(mode, manual=false) {
+      bodyEl.classList.toggle("light-mode", mode === "light");
+      bodyEl.classList.toggle("dark-mode", mode === "dark");
+      toggleBtn.setAttribute("aria-pressed", mode === "dark" ? "true" : "false");
+      if (manual) {
+        try { localStorage.setItem(STORAGE_THEME, mode); } catch {}
+        htmlEl.setAttribute("data-theme", "manual");
+        showStatus("已手動切換為 " + (mode === "light" ? "日間" : "夜間") + " 模式");
+      }
+    }
+    function getSystemPref() {
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    function parseTimeToMinutes(t) {
+      const [h, m] = (t || "").split(":").map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return ((h % 24) * 60 + (m % 60) + 1440) % 1440;
+    }
+    function isInRange(mins, start, end) {
+      if (start === null || end === null) return false;
+      if (start === end) return true;
+      if (start < end) return mins >= start && mins < end;
+      return (mins >= start && mins < 1440) || (mins >= 0 && mins < end);
+    }
+    function getSchedule() {
+      const defaults = { dayStart:"06:00", dayEnd:"19:00", nightStart:"19:00", nightEnd:"06:00" };
+      try {
+        const raw = localStorage.getItem(STORAGE_SCHEDULE);
+        if (!raw) return defaults;
+        const obj = JSON.parse(raw);
+        return {
+          dayStart: obj.dayStart || defaults.dayStart,
+          dayEnd: obj.dayEnd || defaults.dayEnd,
+          nightStart: obj.nightStart || defaults.nightStart,
+          nightEnd: obj.nightEnd || defaults.nightEnd,
+        };
+      } catch { return defaults; }
+    }
+    function saveSchedule(s) { try { localStorage.setItem(STORAGE_SCHEDULE, JSON.stringify(s)); } catch {} }
+    function applyScheduleToInputs(s) {
+      inputs.dayStart.value = s.dayStart;
+      inputs.dayEnd.value = s.dayEnd;
+      inputs.nightStart.value = s.nightStart;
+      inputs.nightEnd.value = s.nightEnd;
+    }
+    function computeThemeBySchedule(now=new Date(), tz) {
+      const s = getSchedule();
+      const dt = new Intl.DateTimeFormat("en-GB",{hour:"2-digit", minute:"2-digit", hour12:false, timeZone:tz}).formatToParts(now);
+      const hh = parseInt(dt.find(p=>p.type==="hour").value,10);
+      const mm = parseInt(dt.find(p=>p.type==="minute").value,10);
+      const minutes = hh*60+mm;
+
+      const dayStart = parseTimeToMinutes(s.dayStart);
+      const dayEnd = parseTimeToMinutes(s.dayEnd);
+      const nightStart = parseTimeToMinutes(s.nightStart);
+      const nightEnd = parseTimeToMinutes(s.nightEnd);
+
+      if (isInRange(minutes, dayStart, dayEnd)) return "light";
+      if (isInRange(minutes, nightStart, nightEnd)) return "dark";
+      return getSystemPref();
+    }
+    function initTheme(tz) {
+      const saved = localStorage.getItem(STORAGE_THEME);
+      if (saved === "light" || saved === "dark") {
+        setTheme(saved, false);
+        htmlEl.setAttribute("data-theme","manual");
+      } else {
+        setTheme(computeThemeBySchedule(new Date(), tz), false);
+        htmlEl.setAttribute("data-theme","auto");
+      }
+    }
+
+    // ====== 時間與時區 ======
+    function getTZ(){ return tzSelect.value || "Asia/Taipei"; }
+    function is12h(){ return (fmtSelect.value || "24") === "12"; }
+    function timePartsInTZ(date, tz) {
+      const fmt = new Intl.DateTimeFormat("en-US",{hour:"numeric", minute:"numeric", second:"numeric", hour12:false, timeZone:tz});
+      const parts = fmt.formatToParts(date);
+      const get = t => parseInt(parts.find(p=>p.type===t).value,10);
+      return { hour:get("hour"), minute:get("minute"), second:get("second") };
+    }
+
+    // ====== 刻度（Classic） ======
+    function createClassicMarks() {
+      marksGroup.innerHTML = "";
+      for (let i=0; i<60; i++){
+        const isHour = i%5===0;
+        const angle = (i/60)*360;
+        const len = isHour ? 9 : 5;
+        const rOuter = 88, rInner = rOuter - len;
+        const rad = (angle-90)*Math.PI/180;
+        const x1 = 100 + rInner*Math.cos(rad);
+        const y1 = 100 + rInner*Math.sin(rad);
+        const x2 = 100 + rOuter*Math.cos(rad);
+        const y2 = 100 + rOuter*Math.sin(rad);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+        line.setAttribute("x1",x1.toFixed(3));
+        line.setAttribute("y1",y1.toFixed(3));
+        line.setAttribute("x2",x2.toFixed(3));
+        line.setAttribute("y2",y2.toFixed(3));
+        line.setAttribute("class", isHour ? "mark-hour" : "mark-minute");
+        line.setAttribute("stroke-width", isHour ? "2" : "1");
+        line.setAttribute("stroke-linecap","round");
+        marksGroup.appendChild(line);
+      }
+    }
+
+    // ====== 運動風外圈與時標（Rolex 風格） ======
+    function createSportBezel() {
+      bezelGroup.innerHTML = "";
+      // 外圈圈（Bezel）
+      const bezel = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      bezel.setAttribute("cx","100"); bezel.setAttribute("cy","100");
+      bezel.setAttribute("r","94");
+      bezel.setAttribute("class","sport-bezel");
+      bezelGroup.appendChild(bezel);
+
+      // 0 分三角形（位於 12 點外圈）
+      const tri = document.createElementNS("http://www.w3.org/2000/svg","path");
+      // 三角中心在外圈上方
+      const triR = 94;
+      const apexX = 100, apexY = 100 - triR - 2;
+      const baseW = 8, baseY = apexY + 8;
+      const d = `M ${apexX} ${apexY} L ${apexX - baseW/2} ${baseY} L ${apexX + baseW/2} ${baseY} Z`;
+      tri.setAttribute("d", d);
+      tri.setAttribute("class","sport-bezel-triangle");
+      tri.setAttribute("color", getComputedStyle(document.body).color);
+      bezelGroup.appendChild(tri);
+
+      // 外圈分鐘刻度（0–59）
+      for (let i=0;i<60;i++){
+        const angle = (i/60)*360;
+        const rad = (angle-90)*Math.PI/180;
+        const isMajor = i%5===0;
+        const rOuter = 94;
+        const len = isMajor ? 8 : 4;
+        const rInner = rOuter - len;
+        const x1 = 100 + rInner*Math.cos(rad);
+        const y1 = 100 + rInner*Math.sin(rad);
+        const x2 = 100 + rOuter*Math.cos(rad);
+        const y2 = 100 + rOuter*Math.sin(rad);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+        line.setAttribute("x1",x1.toFixed(3));
+        line.setAttribute("y1",y1.toFixed(3));
+        line.setAttribute("x2",x2.toFixed(3));
+        line.setAttribute("y2",y2.toFixed(3));
+        line.setAttribute("class","sport-bezel-mark");
+        line.setAttribute("stroke", getComputedStyle(document.body).color);
+        if (isMajor) line.classList.add("sport-bezel-major");
+        bezelGroup.appendChild(line);
+      }
+    }
+
+    function createSportDialMarkers() {
+      sportMarkers.innerHTML = "";
+      // 內盤（較黑）
+      dialBase.setAttribute("class","sport-dial");
+      dialBase.setAttribute("stroke-width","1.2");
+
+      // 12點倒三角、3/6/9長矩形、其他圓點
+      const positions = [];
+      for (let h=1; h<=12; h++){
+        const angle = (h/12)*360;
+        const rad = (angle-90)*Math.PI/180;
+        const r = 74; // 時標中心半徑
+        const x = 100 + r*Math.cos(rad);
+        const y = 100 + r*Math.sin(rad);
+        positions.push({h, x, y, angle});
+      }
+
+      positions.forEach(({h,x,y,angle})=>{
+        if (h===12){
+          // 倒三角
+          const size = 8;
+          const rad = (angle-90)*Math.PI/180;
+          const nx = Math.cos(rad), ny = Math.sin(rad);
+          const px = x, py = y;
+          const bx = -ny, by = nx; // 垂直方向
+          const p1 = [px + nx*size, py + ny*size];
+          const p2 = [px + bx*size*0.8, py + by*size*0.8];
+          const p3 = [px - bx*size*0.8, py - by*size*0.8];
+          const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+          path.setAttribute("d", `M ${p1[0]} ${p1[1]} L ${p2[0]} ${p2[1]} L ${p3[0]} ${p3[1]} Z`);
+          path.setAttribute("class","sport-hour-marker");
+          sportMarkers.appendChild(path);
+          // 夜光填充
+          const lume = document.createElementNS("http://www.w3.org/2000/svg","circle");
+          lume.setAttribute("cx", px); lume.setAttribute("cy", py);
+          lume.setAttribute("r", 3.2); lume.setAttribute("class","sport-lume");
+          sportMarkers.appendChild(lume);
+        } else if (h===3 || h===6 || h===9){
+          // 長矩形
+          const w = 5.5, hgt = 14;
+          const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+          rect.setAttribute("x", (x - w/2).toFixed(3));
+          rect.setAttribute("y", (y - hgt/2).toFixed(3));
+          rect.setAttribute("width", w);
+          rect.setAttribute("height", hgt);
+          rect.setAttribute("rx", 2);
+          rect.setAttribute("fill", getComputedStyle(document.body).getPropertyValue('--fg-dark') || '#fff');
+          rect.setAttribute("class","sport-hour-marker");
+          // 旋轉使其朝向中心
+          const angleDeg = angle;
+          rect.setAttribute("transform", `rotate(${angleDeg}, ${x}, ${y})`);
+          sportMarkers.appendChild(rect);
+
+          const lume = document.createElementNS("http://www.w3.org/2000/svg","rect");
+          const lw = 3.2, lh = 8.5;
+          lume.setAttribute("x", (x - lw/2).toFixed(3));
+          lume.setAttribute("y", (y - lh/2).toFixed(3));
+          lume.setAttribute("width", lw); lume.setAttribute("height", lh); lume.setAttribute("rx", 1.6);
+          lume.setAttribute("class","sport-lume");
+          lume.setAttribute("transform", `rotate(${angleDeg}, ${x}, ${y})`);
+          sportMarkers.appendChild(lume);
+        } else {
+          // 圓點
+          const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+          dot.setAttribute("cx",x); dot.setAttribute("cy",y); dot.setAttribute("r","4.2");
+          dot.setAttribute("class","sport-hour-marker");
+          sportMarkers.appendChild(dot);
+
+          const lume = document.createElementNS("http://www.w3.org/2000/svg","circle");
+          lume.setAttribute("cx",x); lume.setAttribute("cy",y); lume.setAttribute("r","2.6");
+          lume.setAttribute("class","sport-lume");
+          sportMarkers.appendChild(lume);
+        }
+      });
+    }
+
+    // 切換到運動風時，需要調整指針造型
+    function applySportHands() {
+      hourHand.setAttribute("class","sport-hand-hour");
+      minuteHand.setAttribute("class","sport-hand-minute");
+      secondHand.setAttribute("class","sport-hand-second");
+      centerDot.setAttribute("class","sport-center");
+
+      hourHand.setAttribute("x1","0"); hourHand.setAttribute("y1","8");
+      hourHand.setAttribute("x2","0"); hourHand.setAttribute("y2","-40");
+      hourHand.setAttribute("stroke-width","4.2");
+
+      minuteHand.setAttribute("x1","0"); minuteHand.setAttribute("y1","10");
+      minuteHand.setAttribute("x2","0"); minuteHand.setAttribute("y2","-64");
+      minuteHand.setAttribute("stroke-width","3.6");
+
+      secondHand.setAttribute("x1","0"); secondHand.setAttribute("y1","12");
+      secondHand.setAttribute("x2","0"); secondHand.setAttribute("y2","-75");
+      secondHand.setAttribute("stroke-width","1.6");
+
+      // 秒針夜明點
+      // 先移除既有的夜光點
+      const old = svg.querySelector("#secondLume");
+      if (old) old.remove();
+      const lume = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      lume.setAttribute("id","secondLume");
+      lume.setAttribute("r","2.6");
+      lume.setAttribute("class","sport-lume");
+      // 位置：秒針末端退回 12px
+      lume.setAttribute("transform","translate(100,100)");
+      // 由 updateClock 以 rotate 控制位置：在群組內跟著秒針旋轉
+      // 為了跟秒針同步，我們直接附著在 hands 群組，並在 updateClock 時同步 rotate
+      svg.querySelector("#hands").appendChild(lume);
+      // 其實我們會在 update 時設定它的位置：在秒針角度上距中心 62 的半徑
+      lume.dataset.attachToSecond = "true";
+    }
+
+    function applyClassicHands() {
+      hourHand.setAttribute("class","hand-hour");
+      minuteHand.setAttribute("class","hand-minute");
+      secondHand.setAttribute("class","hand-second");
+      centerDot.setAttribute("class","center-dot");
+
+      hourHand.setAttribute("x1","0"); hourHand.setAttribute("y1","6");
+      hourHand.setAttribute("x2","0"); hourHand.setAttribute("y2","-45");
+      hourHand.setAttribute("stroke-width","3.5");
+
+      minuteHand.setAttribute("x1","0"); minuteHand.setAttribute("y1","8");
+      minuteHand.setAttribute("x2","0"); minuteHand.setAttribute("y2","-65");
+      minuteHand.setAttribute("stroke-width","3");
+
+      secondHand.setAttribute("x1","0"); secondHand.setAttribute("y1","10");
+      secondHand.setAttribute("x2","0"); secondHand.setAttribute("y2","-72");
+      secondHand.setAttribute("stroke-width","1.8");
+
+      const old = svg.querySelector("#secondLume");
+      if (old) old.remove();
+    }
+
+    function setFace(face) {
+      if (face === "rolex-sport") {
+        // 運動風
+        createSportBezel();
+        createSportDialMarkers();
+        marksGroup.innerHTML = ""; // 隱藏 Classic 刻度
+        applySportHands();
+      } else {
+        // 經典風
+        bezelGroup.innerHTML = "";
+        sportMarkers.innerHTML = "";
+        dialBase.setAttribute("class","clock-face");
+        createClassicMarks();
+        applyClassicHands();
+      }
+    }
+
+    // ====== 時鐘更新 ======
+    function updateClock(now, tz, format12) {
+      const {hour, minute, second} = timePartsInTZ(now, tz);
+      // 指針角度
+      const secAngle = (second/60)*360;
+      const minAngle = ((minute + second/60)/60)*360;
+      const hourAngle = (((hour%12) + minute/60 + second/3600)/12)*360;
+
+      hourHand.setAttribute("transform", `rotate(${hourAngle})`);
+      minuteHand.setAttribute("transform", `rotate(${minAngle})`);
+      secondHand.setAttribute("transform", `rotate(${secAngle})`);
+
+      // 若有秒針夜光點，依角度定位
+      const lume = svg.querySelector("#secondLume");
+      if (lume) {
+        // 計算相對中心的座標：半徑 62
+        const rad = (secAngle - 90) * Math.PI / 180;
+        const r = 62;
+        const x = r * Math.cos(rad);
+        const y = r * Math.sin(rad);
+        lume.setAttribute("cx", (100 + x).toFixed(2));
+        lume.setAttribute("cy", (100 + y).toFixed(2));
+      }
+
+      // 數位時間與日期
+      const locale = "zh-TW";
+      const timeOpts = { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:format12, timeZone:tz };
+      digitalEl.textContent = new Intl.DateTimeFormat(locale, timeOpts).format(now);
+      const dateOpts = { year:"numeric", month:"2-digit", day:"2-digit", weekday:"short", timeZone:tz };
+      dateEl.textContent = new Intl.DateTimeFormat(locale, dateOpts).format(now);
+    }
+
+    // 每分鐘檢查主題（若未手動覆蓋）
+    let lastMinuteKey = "";
+    function themeWatcher(tz) {
+      const fmt = new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:tz});
+      const key = fmt.format(new Date());
+      if (key !== lastMinuteKey) {
+        lastMinuteKey = key;
+        if (!localStorage.getItem(STORAGE_THEME)) {
+          setTheme(computeThemeBySchedule(new Date(), tz), false);
+        }
+      }
+    }
+
+    // ====== 初始化 ======
+    function init() {
+      // 讀偏好
+      const savedTz = localStorage.getItem(STORAGE_TZ);
+      const savedFmt = localStorage.getItem(STORAGE_FMT);
+      const savedFace = localStorage.getItem(STORAGE_FACE);
+      if (savedTz) tzSelect.value = savedTz;
+      if (savedFmt) fmtSelect.value = savedFmt;
+      if (savedFace) faceSelect.value = savedFace;
+
+      // 主題
+      initTheme(getTZ());
+
+      // 時間表
+      applyScheduleToInputs(getSchedule());
+
+      // 錶面
+      setFace(faceSelect.value);
+
+      // 綁事件
+      toggleBtn.addEventListener("click", () => {
+        const next = bodyEl.classList.contains("dark-mode") ? "light" : "dark";
+        setTheme(next, true);
+      });
+      document.getElementById("saveSchedule").addEventListener("click", () => {
+        const s = {
+          dayStart: inputs.dayStart.value || "06:00",
+          dayEnd: inputs.dayEnd.value || "19:00",
+          nightStart: inputs.nightStart.value || "19:00",
+          nightEnd: inputs.nightEnd.value || "06:00",
+        };
+        saveSchedule(s);
+        if (!localStorage.getItem(STORAGE_THEME)) {
+          setTheme(computeThemeBySchedule(new Date(), getTZ()), false);
+        }
+        showStatus("時間設定已儲存");
+      });
+      document.getElementById("resetSchedule").addEventListener("click", () => {
+        const defaults = { dayStart:"06:00", dayEnd:"19:00", nightStart:"19:00", nightEnd:"06:00" };
+        saveSchedule(defaults);
+        applyScheduleToInputs(defaults);
+        try { localStorage.removeItem(STORAGE_THEME); } catch {}
+        setTheme(computeThemeBySchedule(new Date(), getTZ()), false);
+        htmlEl.setAttribute("data-theme","auto");
+        showStatus("已恢復預設並改回自動模式");
+      });
+      tzSelect.addEventListener("change", () => {
+        try { localStorage.setItem(STORAGE_TZ, tzSelect.value); } catch {}
+        if (!localStorage.getItem(STORAGE_THEME)) {
+          setTheme(computeThemeBySchedule(new Date(), getTZ()), false);
+        }
+        showStatus("已切換時區：" + tzSelect.options[tzSelect.selectedIndex].text);
+      });
+      fmtSelect.addEventListener("change", () => {
+        try { localStorage.setItem(STORAGE_FMT, fmtSelect.value); } catch {}
+        showStatus("已切換為 " + (fmtSelect.value === "12" ? "12 小時制" : "24 小時制"));
+      });
+      faceSelect.addEventListener("change", () => {
+        try { localStorage.setItem(STORAGE_FACE, faceSelect.value); } catch {}
+        setFace(faceSelect.value);
+        showStatus("已切換錶面：" + faceSelect.options[faceSelect.selectedIndex].text);
+      });
+
+      // 系統主題變更監聽
+      try {
+        const mq = window.matchMedia("(prefers-color-scheme: dark)");
+        mq.addEventListener("change", () => {
+          if (!localStorage.getItem(STORAGE_THEME)) {
+            setTheme(computeThemeBySchedule(new Date(), getTZ()), false);
+          }
+        });
+      } catch {}
+    }
+
+    // 動畫循環
+    function tick() {
+      const now = new Date();
+      updateClock(now, getTZ(), is12h());
+      themeWatcher(getTZ());
+      requestAnimationFrame(tick);
+    }
+
+    // 啟動
+    init();
+    tick();
+  </script>
+</body>
+</html>
