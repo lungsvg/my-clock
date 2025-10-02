@@ -131,7 +131,51 @@
     .sport-hand-second { stroke: #e53935; }
     .sport-center { fill: #fff; }
     .dark-mode .sport-center { fill: #fff; }
-    .sport-lume { fill: #b6ffda; opacity: .95; } /* 夜光點（裝飾用） */
+    .sport-lume { fill: #b6ffda; opacity: .95; }
+
+    /* 月曆樣式 */
+    .calendar {
+      width: 100%;
+      max-width: 420px;
+      margin: 14px auto 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--card-bg-light);
+      color: inherit;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+      transition: background-color 0.35s ease;
+    }
+    .dark-mode .calendar { background: var(--card-bg-dark); box-shadow: 0 6px 20px rgba(0,0,0,0.28); }
+    .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .cal-title { font-weight: 700; font-size: 1.05rem; }
+    .cal-nav {
+      border: none; background: transparent; color: inherit;
+      font-size: 1.35rem; width: 40px; height: 36px; border-radius: 8px; cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .cal-nav:hover { background: rgba(0,0,0,0.06); }
+    .dark-mode .cal-nav:hover { background: rgba(255,255,255,0.12); }
+    .cal-nav:active { transform: translateY(1px); }
+    .cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .cal-weekdays div { text-align: center; font-size: 0.82rem; opacity: 0.8; }
+    .cal-cell {
+      aspect-ratio: 1/1;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 10px; font-weight: 600; user-select: none;
+      transition: background 0.15s ease;
+    }
+    .cal-cell.other-month { opacity: 0.35; }
+    .cal-cell.today {
+      outline: 2px solid currentColor; outline-offset: -2px;
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.06) inset;
+    }
+    .dark-mode .cal-cell.today { box-shadow: 0 0 0 3px rgba(255,255,255,0.12) inset; }
+    .cal-cell:hover { background: rgba(0,0,0,0.06); }
+    .dark-mode .cal-cell:hover { background: rgba(255,255,255,0.10); }
+    @media (max-width: 420px) {
+      .calendar { padding: 10px; }
+      .cal-title { font-size: 1rem; }
+    }
   </style>
 </head>
 <body>
@@ -166,6 +210,19 @@
         </div>
         <div class="digital-time" id="digitalTime">--:--:--</div>
         <div class="date-text" id="dateText"></div>
+
+        <!-- 月曆：加在時鐘卡片下方 -->
+        <div id="calendar" class="calendar" aria-label="calendar">
+          <div class="cal-header">
+            <button class="cal-nav" id="calPrev" aria-label="上一個月">‹</button>
+            <div class="cal-title" id="calTitle">--</div>
+            <button class="cal-nav" id="calNext" aria-label="下一個月">›</button>
+          </div>
+          <div class="cal-weekdays">
+            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
       </div>
 
       <div class="controls">
@@ -218,7 +275,7 @@
               <div class="row"><label for="nightEnd">夜間結束</label><input type="time" id="nightEnd" value="06:00" /></div>
             </div>
           </div>
-          <div class="hint">可跨越午夜（如 19:00–06:00）。重疊則以最先符合的時段為準。</div>
+          <div class="hint">可跨越午夜（如 19:00--06:00）。重疊則以最先符合的時段為準。</div>
           <div class="actions">
             <button class="save-button" id="saveSchedule" type="button">儲存時間設定</button>
             <button class="reset-button" id="resetSchedule" type="button">恢復預設</button>
@@ -388,16 +445,13 @@
     // ====== 運動風外圈與時標（Rolex 風格） ======
     function createSportBezel() {
       bezelGroup.innerHTML = "";
-      // 外圈圈（Bezel）
       const bezel = document.createElementNS("http://www.w3.org/2000/svg","circle");
       bezel.setAttribute("cx","100"); bezel.setAttribute("cy","100");
       bezel.setAttribute("r","94");
       bezel.setAttribute("class","sport-bezel");
       bezelGroup.appendChild(bezel);
 
-      // 0 分三角形（位於 12 點外圈）
       const tri = document.createElementNS("http://www.w3.org/2000/svg","path");
-      // 三角中心在外圈上方
       const triR = 94;
       const apexX = 100, apexY = 100 - triR - 2;
       const baseW = 8, baseY = apexY + 8;
@@ -407,7 +461,6 @@
       tri.setAttribute("color", getComputedStyle(document.body).color);
       bezelGroup.appendChild(tri);
 
-      // 外圈分鐘刻度（0–59）
       for (let i=0;i<60;i++){
         const angle = (i/60)*360;
         const rad = (angle-90)*Math.PI/180;
@@ -434,29 +487,26 @@
 
     function createSportDialMarkers() {
       sportMarkers.innerHTML = "";
-      // 內盤（較黑）
       dialBase.setAttribute("class","sport-dial");
       dialBase.setAttribute("stroke-width","1.2");
 
-      // 12點倒三角、3/6/9長矩形、其他圓點
       const positions = [];
       for (let h=1; h<=12; h++){
         const angle = (h/12)*360;
         const rad = (angle-90)*Math.PI/180;
-        const r = 74; // 時標中心半徑
-        const x = 100 + r*Math.cos(rad);
-        const y = 100 + r*Math.sin(rad);
+        theR = 74;
+        const x = 100 + theR*Math.cos(rad);
+        const y = 100 + theR*Math.sin(rad);
         positions.push({h, x, y, angle});
       }
 
       positions.forEach(({h,x,y,angle})=>{
         if (h===12){
-          // 倒三角
           const size = 8;
           const rad = (angle-90)*Math.PI/180;
           const nx = Math.cos(rad), ny = Math.sin(rad);
           const px = x, py = y;
-          const bx = -ny, by = nx; // 垂直方向
+          const bx = -ny, by = nx;
           const p1 = [px + nx*size, py + ny*size];
           const p2 = [px + bx*size*0.8, py + by*size*0.8];
           const p3 = [px - bx*size*0.8, py - by*size*0.8];
@@ -464,13 +514,12 @@
           path.setAttribute("d", `M ${p1[0]} ${p1[1]} L ${p2[0]} ${p2[1]} L ${p3[0]} ${p3[1]} Z`);
           path.setAttribute("class","sport-hour-marker");
           sportMarkers.appendChild(path);
-          // 夜光填充
+
           const lume = document.createElementNS("http://www.w3.org/2000/svg","circle");
           lume.setAttribute("cx", px); lume.setAttribute("cy", py);
           lume.setAttribute("r", 3.2); lume.setAttribute("class","sport-lume");
           sportMarkers.appendChild(lume);
         } else if (h===3 || h===6 || h===9){
-          // 長矩形
           const w = 5.5, hgt = 14;
           const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
           rect.setAttribute("x", (x - w/2).toFixed(3));
@@ -480,9 +529,7 @@
           rect.setAttribute("rx", 2);
           rect.setAttribute("fill", getComputedStyle(document.body).getPropertyValue('--fg-dark') || '#fff');
           rect.setAttribute("class","sport-hour-marker");
-          // 旋轉使其朝向中心
-          const angleDeg = angle;
-          rect.setAttribute("transform", `rotate(${angleDeg}, ${x}, ${y})`);
+          rect.setAttribute("transform", `rotate(${angle}, ${x}, ${y})`);
           sportMarkers.appendChild(rect);
 
           const lume = document.createElementNS("http://www.w3.org/2000/svg","rect");
@@ -491,10 +538,9 @@
           lume.setAttribute("y", (y - lh/2).toFixed(3));
           lume.setAttribute("width", lw); lume.setAttribute("height", lh); lume.setAttribute("rx", 1.6);
           lume.setAttribute("class","sport-lume");
-          lume.setAttribute("transform", `rotate(${angleDeg}, ${x}, ${y})`);
+          lume.setAttribute("transform", `rotate(${angle}, ${x}, ${y})`);
           sportMarkers.appendChild(lume);
         } else {
-          // 圓點
           const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
           dot.setAttribute("cx",x); dot.setAttribute("cy",y); dot.setAttribute("r","4.2");
           dot.setAttribute("class","sport-hour-marker");
@@ -508,7 +554,6 @@
       });
     }
 
-    // 切換到運動風時，需要調整指針造型
     function applySportHands() {
       hourHand.setAttribute("class","sport-hand-hour");
       minuteHand.setAttribute("class","sport-hand-minute");
@@ -527,21 +572,13 @@
       secondHand.setAttribute("x2","0"); secondHand.setAttribute("y2","-75");
       secondHand.setAttribute("stroke-width","1.6");
 
-      // 秒針夜明點
-      // 先移除既有的夜光點
       const old = svg.querySelector("#secondLume");
       if (old) old.remove();
       const lume = document.createElementNS("http://www.w3.org/2000/svg","circle");
       lume.setAttribute("id","secondLume");
       lume.setAttribute("r","2.6");
       lume.setAttribute("class","sport-lume");
-      // 位置：秒針末端退回 12px
-      lume.setAttribute("transform","translate(100,100)");
-      // 由 updateClock 以 rotate 控制位置：在群組內跟著秒針旋轉
-      // 為了跟秒針同步，我們直接附著在 hands 群組，並在 updateClock 時同步 rotate
       svg.querySelector("#hands").appendChild(lume);
-      // 其實我們會在 update 時設定它的位置：在秒針角度上距中心 62 的半徑
-      lume.dataset.attachToSecond = "true";
     }
 
     function applyClassicHands() {
@@ -568,13 +605,11 @@
 
     function setFace(face) {
       if (face === "rolex-sport") {
-        // 運動風
         createSportBezel();
         createSportDialMarkers();
-        marksGroup.innerHTML = ""; // 隱藏 Classic 刻度
+        marksGroup.innerHTML = "";
         applySportHands();
       } else {
-        // 經典風
         bezelGroup.innerHTML = "";
         sportMarkers.innerHTML = "";
         dialBase.setAttribute("class","clock-face");
@@ -586,7 +621,6 @@
     // ====== 時鐘更新 ======
     function updateClock(now, tz, format12) {
       const {hour, minute, second} = timePartsInTZ(now, tz);
-      // 指針角度
       const secAngle = (second/60)*360;
       const minAngle = ((minute + second/60)/60)*360;
       const hourAngle = (((hour%12) + minute/60 + second/3600)/12)*360;
@@ -595,19 +629,16 @@
       minuteHand.setAttribute("transform", `rotate(${minAngle})`);
       secondHand.setAttribute("transform", `rotate(${secAngle})`);
 
-      // 若有秒針夜光點，依角度定位
       const lume = svg.querySelector("#secondLume");
       if (lume) {
-        // 計算相對中心的座標：半徑 62
         const rad = (secAngle - 90) * Math.PI / 180;
         const r = 62;
-        const x = r * Math.cos(rad);
-        const y = r * Math.sin(rad);
-        lume.setAttribute("cx", (100 + x).toFixed(2));
-        lume.setAttribute("cy", (100 + y).toFixed(2));
+        const x = 100 + r * Math.cos(rad);
+        const y = 100 + r * Math.sin(rad);
+        lume.setAttribute("cx", x.toFixed(2));
+        lume.setAttribute("cy", y.toFixed(2));
       }
 
-      // 數位時間與日期
       const locale = "zh-TW";
       const timeOpts = { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:format12, timeZone:tz };
       digitalEl.textContent = new Intl.DateTimeFormat(locale, timeOpts).format(now);
@@ -628,9 +659,64 @@
       }
     }
 
+    // ====== 月曆邏輯 ======
+    const calTitleEl = document.getElementById('calTitle');
+    const calGridEl = document.getElementById('calGrid');
+    const calPrevBtn = document.getElementById('calPrev');
+    const calNextBtn = document.getElementById('calNext');
+    let calCurrent = new Date(); // 以本地時區顯示月曆
+
+    function renderCalendar(y, m) { // m: 0-11
+      calTitleEl.textContent = `${y}年 ${m+1}月`;
+      calGridEl.innerHTML = '';
+
+      const first = new Date(y, m, 1);
+      const startWeekday = first.getDay(); // 0(日)-6(六)
+      const prevLast = new Date(y, m, 0).getDate();
+      const daysInMonth = new Date(y, m+1, 0).getDate();
+      const totalCells = 42;
+
+      const today = new Date();
+      const isToday = (yy,mm,dd) =>
+        yy === today.getFullYear() &&
+        mm === today.getMonth() &&
+        dd === today.getDate();
+
+      for (let i=0; i<totalCells; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell';
+        const dayNum = i - startWeekday + 1;
+
+        if (dayNum <= 0) {
+          const d = prevLast + dayNum;
+          cell.textContent = d;
+          cell.classList.add('other-month');
+        } else if (dayNum > daysInMonth) {
+          const d = dayNum - daysInMonth;
+          cell.textContent = d;
+          cell.classList.add('other-month');
+        } else {
+          cell.textContent = dayNum;
+          if (isToday(y, m, dayNum)) cell.classList.add('today');
+        }
+
+        calGridEl.appendChild(cell);
+      }
+    }
+
+    function gotoCalendarMonth(offset){
+      calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth()+offset, 1);
+      renderCalendar(calCurrent.getFullYear(), calCurrent.getMonth());
+    }
+
+    function initCalendar(){
+      renderCalendar(calCurrent.getFullYear(), calCurrent.getMonth());
+      calPrevBtn.addEventListener('click', ()=>gotoCalendarMonth(-1));
+      calNextBtn.addEventListener('click', ()=>gotoCalendarMonth(1));
+    }
+
     // ====== 初始化 ======
     function init() {
-      // 讀偏好
       const savedTz = localStorage.getItem(STORAGE_TZ);
       const savedFmt = localStorage.getItem(STORAGE_FMT);
       const savedFace = localStorage.getItem(STORAGE_FACE);
@@ -638,16 +724,10 @@
       if (savedFmt) fmtSelect.value = savedFmt;
       if (savedFace) faceSelect.value = savedFace;
 
-      // 主題
       initTheme(getTZ());
-
-      // 時間表
       applyScheduleToInputs(getSchedule());
-
-      // 錶面
       setFace(faceSelect.value);
 
-      // 綁事件
       toggleBtn.addEventListener("click", () => {
         const next = bodyEl.classList.contains("dark-mode") ? "light" : "dark";
         setTheme(next, true);
@@ -700,6 +780,9 @@
           }
         });
       } catch {}
+
+      // 初始化月曆
+      initCalendar();
     }
 
     // 動畫循環
